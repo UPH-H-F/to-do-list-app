@@ -23,7 +23,15 @@ NASM assembles the 32-bit assembly code into an object file. Download NASM 3.01 
 Visual Studio provides the linker (link.exe) for creating the executable from the object file. Download the free Community edition installer from the [official site](https://visualstudio.microsoft.com/downloads/). During installation, select the "Desktop development with C++" workload and include only essential components: C++ core desktop features, MSVC v143 - VS 2022 C++ x64/x86 build tools, the latest Windows SDK, and Just-In-Time debugger. Complete the installation to access the Developer Command Prompt.
 
 ### Build the Application
-Use the "Developer Command Prompt for VS 2022" (search in Start Menu) to ensure link.exe is in PATH—do not use standard Command Prompt. Navigate to your project directory with `cd`, then execute `build32.bat`. On success, `todo32.exe` appears in the folder; run it directly to use the app. The build process targets console subsystem and x86 architecture for 32-bit compatibility.
+Use the "Developer Command Prompt for VS 2022" (search in Start Menu) to ensure link.exe is in PATH—do not use standard Command Prompt. Navigate to your project directory with `cd`, for example:
+```
+C:\Users\Admin\App> cd C:\Path\To\Your\Project
+```
+Then execute `build32.bat` by typing its name and pressing Enter:
+```
+C:\Path\To\Your\Project> build32.bat
+```
+On success, the prompt will display messages like "Assembling 32-bit todo32.asm...", "Linking 32-bit executable...", and "Build successful! Run todo32.exe", with `todo32.exe` appearing in the folder; run it directly to use the app. The build process targets console subsystem and x86 architecture for 32-bit compatibility.
 
 ## Troubleshooting
 Common issues arise from setup errors; refer to this table for solutions.
