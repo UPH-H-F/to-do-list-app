@@ -1,5 +1,4 @@
 ; To-Do List Application for Windows x86 (32-bit)
-; Final Project To-do-list using Assembly language
 ; 
 ; GROUP 3 MEMBERS:
 ; "HANGINON, MARIA FATIMA T."
