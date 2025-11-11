@@ -1,32 +1,51 @@
+; ==============================================================================
 ; To-Do List Application for Windows x86 (32-bit)
-; FINAL VERSION - Correct Prompts
-; Assemble: nasm -f win32 todo32.asm -o todo32.obj
-; Link: link todo32.obj /subsystem:console /entry:main /machine:x86 kernel32.lib
+; ==============================================================================
+; Description: A console-based task management application with file persistence
+; 
+; Authors: Group 3
+;   - CARTONEROS, BEOMARC ANDREW D.
+;   - CARVAJAL, CHRISTIAN EZEKIEL L.
+;   - CASTILLO, CHARLES
+;   - GO, MARCO ENRICO S.
+;   - HANGINON, MARIA FATIMA T.
+;   - SILVESTRE, DASHIELL B.
+; 
+; Date: 2025
+; 
+; Build Instructions:
+;   Assemble: nasm -f win32 todo32.asm -o todo32.obj
+;   Link:     link todo32.obj /subsystem:console /entry:main /machine:x86 kernel32.lib
+; ==============================================================================
 
+; --- External Windows API Functions ---
 global main
-extern _GetStdHandle@4
-extern _WriteFile@20
-extern _ReadFile@20
-extern _ExitProcess@4
-extern _CreateFileA@28
-extern _CloseHandle@4
-extern _Sleep@4
+extern _GetStdHandle@4      ; Get standard input/output handles
+extern _WriteFile@20        ; Write data to console/file
+extern _ReadFile@20         ; Read data from console/file
+extern _ExitProcess@4       ; Exit the program
+extern _CreateFileA@28      ; Create or open a file
+extern _CloseHandle@4       ; Close file handle
+extern _Sleep@4             ; Sleep/delay function
 
 section .data
-    STD_OUTPUT_HANDLE equ -11
-    STD_INPUT_HANDLE equ -10
-    MAX_TASKS equ 30
-    TASK_SIZE equ 64
-    STATUS_OFFSET equ 63
+    ; --- Windows API Constants ---
+    STD_OUTPUT_HANDLE equ -11           ; Standard output handle
+    STD_INPUT_HANDLE equ -10            ; Standard input handle
+    MAX_TASKS equ 30                    ; Maximum number of tasks
+    TASK_SIZE equ 64                    ; Size of each task (63 chars + status byte)
+    STATUS_OFFSET equ 63                ; Offset for task completion status
 
-    GENERIC_READ equ 0x80000000
-    GENERIC_WRITE equ 0x40000000
-    CREATE_ALWAYS equ 2
-    OPEN_EXISTING equ 3
-    FILE_ATTRIBUTE_NORMAL equ 0x80
-    INVALID_HANDLE_VALUE equ -1
+    ; --- File Access Constants ---
+    GENERIC_READ equ 0x80000000         ; File read access
+    GENERIC_WRITE equ 0x40000000        ; File write access
+    CREATE_ALWAYS equ 2                 ; Create new or overwrite file
+    OPEN_EXISTING equ 3                 ; Open existing file
+    FILE_ATTRIBUTE_NORMAL equ 0x80      ; Normal file attributes
+    INVALID_HANDLE_VALUE equ -1         ; Invalid file handle indicator
 
-    filename db "tasks.dat", 0
+    ; --- File Name ---
+    filename db "tasks.dat", 0          ; Binary file to store tasks
 
     separator_thin db 196, 196, 196, 196, 196, 196, 196, 196, 196, 196, 196, 196, 196, 196, 196, 196, 196, 196, 196, 196, 196, 196, 196, 196, 196, 196, 196, 196, 196, 196, 13, 10
     separator_thin_len equ $ - separator_thin
@@ -254,6 +273,9 @@ msg_task_updated_len equ $ - msg_task_updated
     msg_invalid db 13, 10, "  ... Invalid option", 13, 10
     msg_invalid_len equ $ - msg_invalid
 
+    press_enter db 13, 10, "  Press Enter to continue...", 13, 10
+    press_enter_len equ $ - press_enter
+
     newline db 13, 10
     newline_len equ $ - newline
 
@@ -280,28 +302,38 @@ section .bss
     num_buffer resb 12
     delete_flags resb MAX_TASKS
 
+; ==============================================================================
+; MAIN PROGRAM ENTRY POINT
+; ==============================================================================
+; Description: Initializes handles and enters main menu loop
+; ==============================================================================
 section .text
 main:
+    ; Get standard output handle
     push STD_OUTPUT_HANDLE
     call _GetStdHandle@4
     mov [stdout_handle], eax
 
+    ; Get standard input handle
     push STD_INPUT_HANDLE
     call _GetStdHandle@4
     mov [stdin_handle], eax
 
+    ; Initialize program state
     mov dword [task_count], 0
     mov dword [max_tasks_limit], 10
     mov dword [completed_count], 0
     mov dword [first_run], 1
 
+; --- Main program loop ---
 main_loop:
-    call display_menu
-    call read_input
+    call display_menu           ; Show menu and task status
+    call read_input             ; Get user choice
     movzx eax, byte [input_buffer]
 
-    mov dword [first_run], 0
+    mov dword [first_run], 0    ; Clear first-run flag
 
+    ; Route to appropriate function based on user choice
     cmp al, '1'
     je add_task
     cmp al, '2'
@@ -321,10 +353,17 @@ main_loop:
     cmp al, '9'
     je exit_program
 
+    ; Invalid option
     call print_invalid
     jmp main_loop
 
+; ==============================================================================
+; FEATURE: Modify Task Slots
+; ==============================================================================
+; Description: Allows user to change maximum task limit (10/15/20/30)
+; ==============================================================================
 modify_slots:
+    ; Display feature header
     push 0
     push bytes_written
     push header_modify_slots_len
@@ -367,6 +406,14 @@ modify_slots:
     push dword [stdout_handle]
     call _WriteFile@20
 
+    ; Display ESC/cancel hint
+    push 0
+    push bytes_written
+    push hint_esc_cancel_len
+    push hint_esc_cancel
+    push dword [stdout_handle]
+    call _WriteFile@20
+
     push 0
     push bytes_written
     push modify_prompt_len
@@ -376,6 +423,10 @@ modify_slots:
 
     call read_input
     movzx eax, byte [input_buffer]
+
+    ; Check for ESC/cancel (user enters '0')
+    cmp al, '0'
+    je .cancel_modify
 
     cmp al, '1'
     je .set_10
@@ -389,6 +440,10 @@ modify_slots:
     call print_invalid
     jmp main_loop
 
+.cancel_modify:
+    call cancel_operation
+    jmp main_loop
+
 .set_10:
     mov dword [max_tasks_limit], 10
     push 0
@@ -397,6 +452,10 @@ modify_slots:
     push msg_slots_10
     push dword [stdout_handle]
     call _WriteFile@20
+    
+    ; Wait for Enter
+    call wait_for_enter
+    
     jmp main_loop
 
 .set_15:
@@ -407,6 +466,10 @@ modify_slots:
     push msg_slots_15
     push dword [stdout_handle]
     call _WriteFile@20
+    
+    ; Wait for Enter
+    call wait_for_enter
+    
     jmp main_loop
 
 .set_20:
@@ -417,6 +480,10 @@ modify_slots:
     push msg_slots_20
     push dword [stdout_handle]
     call _WriteFile@20
+    
+    ; Wait for Enter
+    call wait_for_enter
+    
     jmp main_loop
 
 .set_30:
@@ -427,9 +494,22 @@ modify_slots:
     push msg_slots_30
     push dword [stdout_handle]
     call _WriteFile@20
+    
+    ; Wait for Enter
+    call wait_for_enter
+    
     jmp main_loop
 
+; ==============================================================================
+; FEATURE: Add Task(s)
+; ==============================================================================
+; Description: Adds one or more tasks to the list
+; Input: User enters tasks separated by semicolons (;)
+; Validation: Trims whitespace, rejects empty tasks, checks for full list
+; Example: "task1;task2;task3" creates 3 separate tasks
+; ==============================================================================
 add_task:
+    ; Display usage hint
     push 0
     push bytes_written
     push hint_add_task_len
@@ -437,6 +517,7 @@ add_task:
     push dword [stdout_handle]
     call _WriteFile@20
 
+    ; Display cancel hint
     push 0
     push bytes_written
     push hint_esc_cancel_len
@@ -444,6 +525,7 @@ add_task:
     push dword [stdout_handle]
     call _WriteFile@20
 
+    ; Display input prompt
     push 0
     push bytes_written
     push prompt_task_len
@@ -451,78 +533,155 @@ add_task:
     push dword [stdout_handle]
     call _WriteFile@20
 
+    ; Read user input
     call read_input
     
-    ; Check for ESC cancellation
+    ; Check for ESC/cancel (user enters '0')
     cmp byte [input_buffer], '0'
     jne .continue_add
     call cancel_operation
     jmp .skip_success_message
 
 .continue_add:
+    ; Initialize parsing variables
+    lea esi, [input_buffer]     ; ESI = pointer to input string
+    xor ebx, ebx                ; EBX = current position in input
 
-    lea esi, [input_buffer]
-    xor ebx, ebx
-
+; --- Main parsing loop: iterate through input string ---
 .parse_loop:
+    ; Check end conditions
     movzx eax, byte [esi + ebx]
-    cmp al, 0
+    cmp al, 0                   ; Null terminator?
     je .finish_adding
-    cmp al, 13
+    cmp al, 13                  ; Carriage return?
     je .finish_adding
-    cmp al, 10
+    cmp al, 10                  ; Line feed?
     je .finish_adding
 
+    ; Check if task list is full
     mov eax, [task_count]
     mov ecx, [max_tasks_limit]
     cmp eax, ecx
     jge .finish_adding
 
+    ; Calculate destination address for new task
     mov eax, [task_count]
     mov ecx, TASK_SIZE
     mul ecx
-    lea edi, [tasks + eax]
+    lea edi, [tasks + eax]      ; EDI = destination task slot
 
-    xor ecx, ecx
+    xor ecx, ecx                ; ECX = character count in current task
 
+; --- VALIDATION: Skip leading whitespace ---
+.skip_leading_whitespace:
+    movzx eax, byte [esi + ebx]
+    cmp al, ' '                 ; Space?
+    je .skip_whitespace_char
+    cmp al, 9                   ; Tab?
+    je .skip_whitespace_char
+    jmp .copy_chars             ; Start copying actual characters
+
+.skip_whitespace_char:
+    inc ebx
+    movzx eax, byte [esi + ebx]
+    cmp al, 0                   ; End of input?
+    je .finish_adding
+    cmp al, ';'                 ; Empty task (only whitespace before ;)?
+    je .skip_empty_task
+    cmp al, 13
+    je .finish_adding
+    cmp al, 10
+    je .finish_adding
+    jmp .skip_leading_whitespace
+
+; --- Copy characters to task buffer ---
 .copy_chars:
     movzx eax, byte [esi + ebx]
+    
+    ; Check for end conditions
     cmp al, 0
-    je .save_task
-    cmp al, ';'
-    je .save_task
+    je .trim_and_save
+    cmp al, ';'                 ; Task separator
+    je .trim_and_save
     cmp al, 13
-    je .save_task
+    je .trim_and_save
     cmp al, 10
-    je .save_task
+    je .trim_and_save
+    
+    ; Check if buffer is full
     cmp ecx, TASK_SIZE - 1
-    jge .save_task
+    jge .trim_and_save
 
+    ; Copy character to task buffer
     mov byte [edi + ecx], al
     inc ebx
     inc ecx
     jmp .copy_chars
 
-.save_task:
+; --- VALIDATION: Trim trailing whitespace and save task ---
+.trim_and_save:
+    ; Trim trailing whitespace
+    cmp ecx, 0                  ; Empty task?
+    je .skip_empty_task
+
+.trim_loop:
+    ; Check if last character is whitespace
+    movzx eax, byte [edi + ecx - 1]
+    cmp al, ' '                 ; Space?
+    je .remove_trailing
+    cmp al, 9                   ; Tab?
+    je .remove_trailing
+    jmp .save_trimmed_task
+
+.remove_trailing:
+    dec ecx
+    cmp ecx, 0                  ; All whitespace?
+    je .skip_empty_task
+    jmp .trim_loop
+
+.save_trimmed_task:
+    ; Null-terminate the task
     mov byte [edi + ecx], 0
+    
+    ; Increment task counter (task successfully added)
     inc dword [task_count]
 
+    ; Check if there are more tasks to parse
     cmp byte [esi + ebx], ';'
     jne .finish_adding
-    inc ebx
+    inc ebx                     ; Skip the semicolon
     jmp .parse_loop
 
+; --- Skip empty task (validation) ---
+.skip_empty_task:
+    ; Move to next task or end
+    movzx eax, byte [esi + ebx]
+    cmp al, 0
+    je .finish_adding
+    cmp al, ';'
+    je .skip_empty_continue
+    inc ebx
+    jmp .skip_empty_task
+
+.skip_empty_continue:
+    inc ebx                     ; Skip the semicolon
+    jmp .parse_loop
+
+; --- Finish adding tasks ---
 .finish_adding:
+    ; Display success message
     push 0
     push bytes_written
     push msg_tasks_added_len
     push msg_tasks_added
     push dword [stdout_handle]
     call _WriteFile@20
+    
+    ; Wait for Enter
+    call wait_for_enter
 
 .skip_success_message:
     jmp main_loop
-    jmp .skip_success_message
 
 task_list_full:
     push 0
@@ -533,13 +692,24 @@ task_list_full:
     call _WriteFile@20
     jmp main_loop
 
-view_tasks:
-    mov eax, [task_count]
-    cmp eax, 0
-    je task_list_empty
+; ==============================================================================
+; HELPER FUNCTION: Display Tasks Preview
+; ==============================================================================
+; Description: Shows task list in bordered table (for Update/Delete/Toggle)
+; Input: None (reads from tasks array)
+; Output: Displays tasks to console
+; Returns: Uses RET (can be called as subroutine)
+; ==============================================================================
+display_tasks_preview:
+    ; Save registers
+    push eax
+    push ebx
+    push ecx
+    push edx
 
     call print_newline
 
+    ; Print top border
     push 0
     push bytes_written
     push separator_top_len
@@ -547,12 +717,13 @@ view_tasks:
     push dword [stdout_handle]
     call _WriteFile@20
 
-    xor ebx, ebx
+    xor ebx, ebx                ; EBX = task index counter
 
-view_loop:
+.preview_loop:
     cmp ebx, [task_count]
-    jge view_done
+    jge .preview_done
 
+    ; Print left border
     push 0
     push bytes_written
     push border_left_len
@@ -560,6 +731,154 @@ view_loop:
     push dword [stdout_handle]
     call _WriteFile@20
 
+    ; Print task number
+    mov eax, ebx
+    inc eax
+    call num_to_string
+
+    push 0
+    push bytes_written
+    push eax
+    push num_buffer
+    push dword [stdout_handle]
+    call _WriteFile@20
+
+    push 0
+    push bytes_written
+    push dot_space_len
+    push dot_space
+    push dword [stdout_handle]
+    call _WriteFile@20
+
+    ; Get task address
+    mov eax, ebx
+    mov ecx, TASK_SIZE
+    mul ecx
+    lea edx, [tasks + eax]
+
+    push ebx
+    push edx
+
+    ; Check completion status and print checkbox
+    movzx eax, byte [edx + STATUS_OFFSET]
+    cmp al, 1
+    je .preview_print_complete
+
+    push 0
+    push bytes_written
+    push checkbox_incomplete_len
+    push checkbox_incomplete
+    push dword [stdout_handle]
+    call _WriteFile@20
+    jmp .preview_after_checkbox
+
+.preview_print_complete:
+    push 0
+    push bytes_written
+    push checkbox_complete_len
+    push checkbox_complete
+    push dword [stdout_handle]
+    call _WriteFile@20
+
+.preview_after_checkbox:
+    pop edx
+    pop ebx
+    push ebx
+    
+    ; Find task text length
+    xor ecx, ecx
+.preview_find_len:
+    cmp ecx, STATUS_OFFSET
+    jge .preview_len_found
+    movzx eax, byte [edx + ecx]
+    cmp al, 0
+    je .preview_len_found
+    cmp al, 13
+    je .preview_len_found
+    cmp al, 10
+    je .preview_len_found
+    inc ecx
+    jmp .preview_find_len
+
+.preview_len_found:
+    pop ebx
+    cmp ecx, 0
+    je .preview_skip_print
+
+    ; Print task text
+    push 0
+    push bytes_written
+    push ecx
+    push edx
+    push dword [stdout_handle]
+    call _WriteFile@20
+
+.preview_skip_print:
+    ; Print newline
+    push 0
+    push bytes_written
+    push newline_only_len
+    push newline_only
+    push dword [stdout_handle]
+    call _WriteFile@20
+
+    inc ebx
+    jmp .preview_loop
+
+.preview_done:
+    ; Print bottom border
+    push 0
+    push bytes_written
+    push separator_bottom_len
+    push separator_bottom
+    push dword [stdout_handle]
+    call _WriteFile@20
+
+    ; Restore registers
+    pop edx
+    pop ecx
+    pop ebx
+    pop eax
+    ret
+
+; ==============================================================================
+; FEATURE: View Tasks
+; ==============================================================================
+; Description: Displays all tasks with checkboxes and task numbers
+; Format: Displays in a bordered box with completion status
+; ==============================================================================
+view_tasks:
+    ; Check if there are any tasks
+    mov eax, [task_count]
+    cmp eax, 0
+    je task_list_empty
+
+    call print_newline
+
+    ; Print top border
+    push 0
+    push bytes_written
+    push separator_top_len
+    push separator_top
+    push dword [stdout_handle]
+    call _WriteFile@20
+
+    xor ebx, ebx                ; EBX = task index counter
+
+; --- Display each task ---
+view_loop:
+    cmp ebx, [task_count]
+    jge view_done
+
+    ; Print left border
+    push 0
+    push bytes_written
+    push border_left_len
+    push border_left
+    push dword [stdout_handle]
+    call _WriteFile@20
+
+    ; Print task number
     mov eax, ebx
     inc eax
     call num_to_string
@@ -655,6 +974,9 @@ view_done:
     push separator_bottom
     push dword [stdout_handle]
     call _WriteFile@20
+    
+    ; Wait for Enter
+    call wait_for_enter
 
     jmp main_loop
 
@@ -671,6 +993,9 @@ update_task:
     mov eax, [task_count]
     cmp eax, 0
     je task_list_empty
+
+    ; **NEW: Display tasks preview so user can see task numbers**
+    call display_tasks_preview
 
     ; Add the ESC hint at the beginning
     push 0
@@ -778,12 +1103,19 @@ update_task:
     push msg_task_updated
     push dword [stdout_handle]
     call _WriteFile@20
+    
+    ; Wait for Enter
+    call wait_for_enter
+    
     jmp main_loop
 
 delete_task:
     mov eax, [task_count]
     cmp eax, 0
     je task_list_empty
+
+    ; **NEW: Display tasks preview so user can see task numbers**
+    call display_tasks_preview
 
     ; Add the hint and first ESC check at the beginning
     push 0
@@ -829,6 +1161,9 @@ delete_task:
     push msg_deleted_all
     push dword [stdout_handle]
     call _WriteFile@20
+    
+    ; Wait for Enter
+    call wait_for_enter
 
     jmp main_loop
 
@@ -969,6 +1304,9 @@ delete_task:
     push msg_deleted
     push dword [stdout_handle]
     call _WriteFile@20
+    
+    ; Wait for Enter
+    call wait_for_enter
 
     jmp main_loop
 
@@ -976,6 +1314,9 @@ toggle_complete:
     mov eax, [task_count]
     cmp eax, 0
     je task_list_empty
+
+    ; **NEW: Display tasks preview so user can see task numbers**
+    call display_tasks_preview
 
     push 0
     push bytes_written
@@ -1113,6 +1454,10 @@ toggle_complete:
     push msg_tasks_toggled
     push dword [stdout_handle]
     call _WriteFile@20
+    
+    ; Wait for Enter
+    call wait_for_enter
+    
     jmp .skip_toggle_success
 
 .no_tasks_toggled:
@@ -1122,6 +1467,9 @@ toggle_complete:
     push msg_no_valid_tasks
     push dword [stdout_handle]
     call _WriteFile@20
+    
+    ; Wait for Enter
+    call wait_for_enter
 
 .skip_toggle_success:
     jmp main_loop
@@ -1185,6 +1533,9 @@ save_tasks:
     push msg_saved
     push dword [stdout_handle]
     call _WriteFile@20
+    
+    ; Wait for Enter
+    call wait_for_enter
 
     jmp main_loop
 
@@ -1195,6 +1546,10 @@ save_error:
     push msg_save_error
     push dword [stdout_handle]
     call _WriteFile@20
+    
+    ; Wait for Enter
+    call wait_for_enter
+    
     jmp main_loop
 
 load_tasks:
@@ -1263,6 +1618,9 @@ load_tasks:
     push msg_loaded
     push dword [stdout_handle]
     call _WriteFile@20
+    
+    ; Wait for Enter
+    call wait_for_enter
 
     jmp main_loop
 
@@ -1277,6 +1635,10 @@ load_error:
     push msg_load_error
     push dword [stdout_handle]
     call _WriteFile@20
+    
+    ; Wait for Enter
+    call wait_for_enter
+    
     jmp main_loop
 
 show_spinner:
@@ -1644,32 +2006,46 @@ display_menu:
 
     ret
 
+; ==============================================================================
+; UTILITY FUNCTIONS
+; ==============================================================================
+
+; ------------------------------------------------------------------------------
+; Function: num_to_string
+; Description: Converts a number in EAX to decimal string in num_buffer
+; Input: EAX = number to convert
+; Output: EAX = length of string, num_buffer = ASCII string
+; Registers modified: EAX, EBX, ECX, EDX, EDI
+; ------------------------------------------------------------------------------
 num_to_string:
     push ebx
     push ecx
     push edx
 
     lea edi, [num_buffer]
-    mov ecx, 10
-    xor ebx, ebx
+    mov ecx, 10                 ; Base 10 for decimal
+    xor ebx, ebx                ; EBX = digit counter
 
+    ; Handle zero special case
     cmp eax, 0
     jne .convert_loop
     mov byte [edi], '0'
     inc ebx
     jmp .done
 
+; --- Convert number to digits (in reverse order) ---
 .convert_loop:
     cmp eax, 0
     je .reverse
 
     xor edx, edx
-    div ecx
-    add dl, '0'
-    push edx
-    inc ebx
+    div ecx                     ; EDX = remainder, EAX = quotient
+    add dl, '0'                 ; Convert digit to ASCII
+    push edx                    ; Store on stack
+    inc ebx                     ; Increment digit count
     jmp .convert_loop
 
+; --- Pop digits in correct order ---
 .reverse:
     lea edi, [num_buffer]
     mov ecx, ebx
@@ -1684,18 +2060,28 @@ num_to_string:
     jmp .pop_digits
 
 .done:
-    mov eax, ebx
+    mov eax, ebx                ; Return string length
     pop edx
     pop ecx
     pop ebx
     ret
 
+; ------------------------------------------------------------------------------
+; Function: read_input
+; Description: Reads user input from console and removes trailing newlines
+; Input: None
+; Output: input_buffer = user input string (null-terminated)
+;         bytes_read = number of bytes read
+; Registers modified: EAX, ECX, EDI
+; ------------------------------------------------------------------------------
 read_input:
+    ; Clear input buffer
     lea edi, [input_buffer]
     mov ecx, 64
     xor al, al
     rep stosb
 
+    ; Read from console
     push 0
     push bytes_read
     push 63
@@ -1703,10 +2089,12 @@ read_input:
     push dword [stdin_handle]
     call _ReadFile@20
 
+    ; Get number of bytes read
     mov ecx, [bytes_read]
     cmp ecx, 0
     je .done
 
+    ; Remove trailing CR/LF
     lea edi, [input_buffer]
     add edi, ecx
 
@@ -1717,9 +2105,9 @@ read_input:
     dec ecx
 
     movzx eax, byte [edi]
-    cmp al, 13
+    cmp al, 13                  ; Carriage return?
     je .remove_char
-    cmp al, 10
+    cmp al, 10                  ; Line feed?
     je .remove_char
     jmp .done
 
@@ -1730,6 +2118,10 @@ read_input:
 .done:
     ret
 
+; ------------------------------------------------------------------------------
+; Function: print_newline
+; Description: Prints a newline (CR+LF) to console
+; ------------------------------------------------------------------------------
 print_newline:
     push 0
     push bytes_written
@@ -1739,6 +2131,10 @@ print_newline:
     call _WriteFile@20
     ret
 
+; ------------------------------------------------------------------------------
+; Function: print_invalid
+; Description: Prints "invalid option" message to console
+; ------------------------------------------------------------------------------
 print_invalid:
     push 0
     push bytes_written
@@ -1748,6 +2144,10 @@ print_invalid:
     call _WriteFile@20
     ret
 
+; ------------------------------------------------------------------------------
+; Function: cancel_operation
+; Description: Prints "operation cancelled" message to console
+; ------------------------------------------------------------------------------
 cancel_operation:
     push 0
     push bytes_written
@@ -1757,6 +2157,33 @@ cancel_operation:
     call _WriteFile@20
     ret
 
+; ------------------------------------------------------------------------------
+; Function: wait_for_enter
+; Description: Displays "Press Enter to continue..." and waits for user input
+; ------------------------------------------------------------------------------
+wait_for_enter:
+    ; Display the message
+    push 0
+    push bytes_written
+    push press_enter_len
+    push press_enter
+    push dword [stdout_handle]
+    call _WriteFile@20
+    
+    ; Wait for Enter key
+    push 0
+    push bytes_read
+    push 2                          ; Read up to 2 bytes (Enter = CR+LF)
+    push input_buffer
+    push dword [stdin_handle]
+    call _ReadFile@20
+    
+    ret
+
+; ------------------------------------------------------------------------------
+; Function: exit_program
+; Description: Terminates the program
+; ------------------------------------------------------------------------------
 exit_program:
     push 0
     call _ExitProcess@4
