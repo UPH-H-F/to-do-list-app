@@ -1,11 +1,11 @@
 ; To-Do List Application for Windows x86 (32-bit) using Assembly language
 ; 
 ; GROUP 3 MEMBERS:
-; "HANGINON, MARIA FATIMA T."
-; "CASTILLO, CHARLES"
 ; "CARTONEROS, BEOMARC ANDREW D."
 ; "CARVAJAL, CHRISTIAN EZEKIEL L."
+; "CASTILLO, CHARLES"
 ; "GO, MARCO ENRICO S."
+; "HANGINON, MARIA FATIMA T."
 ; "SILVESTRE, DASHIELL B."
 ;
 ; Features:
